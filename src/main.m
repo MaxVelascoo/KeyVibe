@@ -35,8 +35,9 @@ static AVAudioPCMBuffer *makeClick(AVAudioFormat *format, int style, int tier, i
         out[i]=(float)fmax(-.95,fmin(.95,x));
     } return b;
 }
-@interface KeyVibe : NSObject <NSApplicationDelegate, NSWindowDelegate>
-@property NSWindow *window;
+@interface KeyVibe : NSObject <NSApplicationDelegate, NSPopoverDelegate>
+@property NSPopover *popover;
+@property NSView *contentView;
 @property NSStatusItem *statusItem;
 @property NSTextField *sensorLabel, *keyboardLabel, *levelLabel;
 @property NSLevelIndicator *meter;
@@ -68,49 +69,54 @@ static CGEventRef onKey(CGEventTapProxy proxy, CGEventType type, CGEventRef even
 @implementation KeyVibe
 - (NSTextField *)label:(NSString *)text x:(double)x y:(double)y size:(double)size {
     NSTextField *v=[NSTextField labelWithString:text];v.font=[NSFont systemFontOfSize:size];
-    v.frame=NSMakeRect(x,y,500,26);[self.window.contentView addSubview:v];return v;
+    v.frame=NSMakeRect(x,y,356,26);[self.contentView addSubview:v];return v;
 }
 - (NSButton *)button:(NSString *)title action:(SEL)action frame:(NSRect)frame {
-    NSButton *b=[NSButton buttonWithTitle:title target:self action:action];b.frame=frame;[self.window.contentView addSubview:b];return b;
+    NSButton *b=[NSButton buttonWithTitle:title target:self action:action];b.frame=frame;[self.contentView addSubview:b];return b;
 }
 - (void)applicationDidFinishLaunching:(NSNotification *)note {
     NSUserDefaults *d=NSUserDefaults.standardUserDefaults;
-    [d registerDefaults:@{@"volume":@.35,@"sensitivity":@1.,@"style":@0}];
-    self.window=[[NSWindow alloc] initWithContentRect:NSMakeRect(0,0,570,560) styleMask:NSWindowStyleMaskTitled|NSWindowStyleMaskClosable|NSWindowStyleMaskMiniaturizable backing:NSBackingStoreBuffered defer:NO];
-    self.window.title=@"KeyVibe · Prototipo";self.window.delegate=self;self.window.releasedWhenClosed=NO;
-    [self.window center];
-    NSTextField *title=[self label:@"Tu teclado, con carácter." x:30 y:492 size:26];title.font=[NSFont boldSystemFontOfSize:26];
-    [self label:@"Sonido que responde a la vibración de cada pulsación." x:30 y:463 size:13];
-    self.enabled=[NSButton checkboxWithTitle:@"Sonido activado" target:self action:@selector(save:)];self.enabled.frame=NSMakeRect(30,421,220,28);self.enabled.state=NSControlStateValueOn;[self.window.contentView addSubview:self.enabled];
-    [self label:@"Sonido" x:30 y:376 size:14];
-    self.style=[[NSPopUpButton alloc] initWithFrame:NSMakeRect(170,376,245,28) pullsDown:NO];
-    [self.style addItemsWithTitles:styleNames()];[self.style selectItemAtIndex:MAX(0,MIN((NSInteger)styleNames().count-1,[d integerForKey:@"style"]))];self.style.target=self;self.style.action=@selector(save:);[self.window.contentView addSubview:self.style];
-    [self label:@"Volumen" x:30 y:332 size:14];
-    self.volume=[NSSlider sliderWithValue:[d doubleForKey:@"volume"] minValue:0 maxValue:1 target:self action:@selector(save:)];self.volume.frame=NSMakeRect(170,337,330,20);[self.window.contentView addSubview:self.volume];
-    [self label:@"Sensibilidad" x:30 y:287 size:14];
-    self.sensitivity=[NSSlider sliderWithValue:[d doubleForKey:@"sensitivity"] minValue:.2 maxValue:5 target:self action:@selector(save:)];self.sensitivity.frame=NSMakeRect(170,292,330,20);[self.window.contentView addSubview:self.sensitivity];
-    [self label:@"Auméntala si tus pulsaciones siempre suenan suaves." x:170 y:264 size:11];
-    self.meter=[[NSLevelIndicator alloc] initWithFrame:NSMakeRect(30,224,510,18)];self.meter.levelIndicatorStyle=NSLevelIndicatorStyleContinuousCapacity;self.meter.minValue=0;self.meter.maxValue=1;self.meter.warningValue=.65;self.meter.criticalValue=.9;[self.window.contentView addSubview:self.meter];
-    self.levelLabel=[self label:@"Escribe para probar la intensidad" x:30 y:191 size:13];
-    self.sensorLabel=[self label:@"Comprobando acelerómetro…" x:30 y:149 size:12];
-    self.keyboardLabel=[self label:@"Teclado: pendiente de permiso de macOS" x:30 y:123 size:12];
-    [self button:@"Permitir teclado" action:@selector(allowKeyboard:) frame:NSMakeRect(25,73,175,32)];
-    [self button:@"Probar sonido" action:@selector(preview:) frame:NSMakeRect(207,73,145,32)];
-    [self button:@"Importar sonido…" action:@selector(importSound:) frame:NSMakeRect(360,73,185,32)];
-    [self button:@"Importar pack…" action:@selector(importPack:) frame:NSMakeRect(360,39,185,30)];
-    [self label:@"Todo funciona en tu Mac. No guarda lo que escribes." x:30 y:17 size:12];
-    self.statusItem=[NSStatusBar.systemStatusBar statusItemWithLength:NSVariableStatusItemLength];self.statusItem.button.title=@"♫ KV";
-    NSMenu *menu=[NSMenu new];NSMenuItem *show=[menu addItemWithTitle:@"Abrir KeyVibe" action:@selector(show:) keyEquivalent:@""];show.target=self;
-    NSMenuItem *toggle=[menu addItemWithTitle:@"Activar / pausar" action:@selector(toggle:) keyEquivalent:@""];toggle.target=self;
-    [menu addItem:NSMenuItem.separatorItem];[menu addItemWithTitle:@"Salir" action:@selector(terminate:) keyEquivalent:@"q"];self.statusItem.menu=menu;
-    [self startAudio];[self restoreSounds];[self restorePacks];self.sensorStatus=startSensor();
+    [d registerDefaults:@{@"volume":@.35,@"sensitivity":@1.,@"style":@0,@"enabled":@YES}];
+    NSViewController *controller=[NSViewController new];
+    self.contentView=[[NSView alloc] initWithFrame:NSMakeRect(0,0,400,520)];controller.view=self.contentView;
+    self.popover=[NSPopover new];self.popover.contentViewController=controller;self.popover.contentSize=NSMakeSize(400,520);self.popover.behavior=NSPopoverBehaviorTransient;self.popover.animates=YES;self.popover.delegate=self;
+    NSTextField *title=[self label:@"KeyVibe" x:22 y:474 size:23];title.font=[NSFont boldSystemFontOfSize:23];
+    [self label:@"Tu teclado, con carácter." x:22 y:447 size:13];
+    self.enabled=[NSButton checkboxWithTitle:@"Sonido activado" target:self action:@selector(save:)];self.enabled.frame=NSMakeRect(22,406,220,28);self.enabled.state=[d boolForKey:@"enabled"]?NSControlStateValueOn:NSControlStateValueOff;[self.contentView addSubview:self.enabled];
+    [self label:@"Sonido" x:22 y:363 size:13];
+    self.style=[[NSPopUpButton alloc] initWithFrame:NSMakeRect(108,361,270,28) pullsDown:NO];
+    [self.style addItemsWithTitles:styleNames()];[self.style selectItemAtIndex:MAX(0,MIN((NSInteger)styleNames().count-1,[d integerForKey:@"style"]))];self.style.target=self;self.style.action=@selector(save:);[self.contentView addSubview:self.style];
+    [self label:@"Volumen" x:22 y:320 size:13];
+    self.volume=[NSSlider sliderWithValue:[d doubleForKey:@"volume"] minValue:0 maxValue:1 target:self action:@selector(save:)];self.volume.frame=NSMakeRect(108,325,270,20);[self.contentView addSubview:self.volume];
+    [self label:@"Sensibilidad" x:22 y:278 size:13];
+    self.sensitivity=[NSSlider sliderWithValue:[d doubleForKey:@"sensitivity"] minValue:.2 maxValue:5 target:self action:@selector(save:)];self.sensitivity.frame=NSMakeRect(108,283,270,20);[self.contentView addSubview:self.sensitivity];
+    [self label:@"Súbela si todas las pulsaciones suenan suaves." x:108 y:255 size:10];
+    self.meter=[[NSLevelIndicator alloc] initWithFrame:NSMakeRect(22,224,356,16)];self.meter.levelIndicatorStyle=NSLevelIndicatorStyleContinuousCapacity;self.meter.minValue=0;self.meter.maxValue=1;self.meter.warningValue=.65;self.meter.criticalValue=.9;[self.contentView addSubview:self.meter];
+    self.levelLabel=[self label:@"Escribe para probar la intensidad" x:22 y:192 size:12];
+    self.sensorLabel=[self label:@"Comprobando acelerómetro…" x:22 y:158 size:11];
+    self.keyboardLabel=[self label:@"Teclado: pendiente de permiso" x:22 y:133 size:11];
+    [self button:@"Permitir" action:@selector(allowKeyboard:) frame:NSMakeRect(17,91,112,30)];
+    [self button:@"Probar" action:@selector(preview:) frame:NSMakeRect(136,91,104,30)];
+    [self button:@"Importar sonido…" action:@selector(importSound:) frame:NSMakeRect(247,91,136,30)];
+    [self button:@"Salir" action:@selector(quit:) frame:NSMakeRect(17,55,112,28)];
+    [self button:@"Importar pack…" action:@selector(importPack:) frame:NSMakeRect(247,55,136,28)];
+    [self label:@"Local y privado · no guarda lo que escribes" x:22 y:16 size:10];
+    self.statusItem=[NSStatusBar.systemStatusBar statusItemWithLength:NSSquareStatusItemLength];
+    self.statusItem.button.image=[NSImage imageWithSystemSymbolName:@"keyboard" accessibilityDescription:@"KeyVibe"];
+    self.statusItem.button.image.template=YES;self.statusItem.button.toolTip=@"KeyVibe";self.statusItem.button.target=self;self.statusItem.button.action=@selector(togglePopover:);
+    [self startAudio];[self restoreSounds];[self restorePacks];[self save:nil];self.sensorStatus=startSensor();
     self.timer=[NSTimer scheduledTimerWithTimeInterval:.1 target:self selector:@selector(refresh:) userInfo:nil repeats:YES];
     [[NSWorkspace sharedWorkspace].notificationCenter addObserver:self selector:@selector(wake:) name:NSWorkspaceDidWakeNotification object:nil];
-    [self show:nil];
     dispatch_async(dispatch_get_main_queue(),^{
         if(![self connectKeyboard])CGRequestListenEventAccess();
     });
 }
+- (void)togglePopover:(id)sender {
+    if(self.popover.isShown){[self.popover performClose:sender];return;}
+    NSStatusBarButton *button=self.statusItem.button;
+    [self.popover showRelativeToRect:button.bounds ofView:button preferredEdge:NSRectEdgeMinY];
+}
+- (void)quit:(id)sender {[NSApp terminate:nil];}
 - (void)startAudio {
     self.engine=[AVAudioEngine new]; self.voices=[NSMutableArray new];self.sounds=[NSMutableArray new];
     AVAudioFormat *format=[[AVAudioFormat alloc] initStandardFormatWithSampleRate:48000 channels:1];
@@ -210,7 +216,8 @@ static CGEventRef onKey(CGEventTapProxy proxy, CGEventType type, CGEventRef even
     NSOpenPanel *panel=[NSOpenPanel openPanel];panel.allowedContentTypes=@[UTTypeWAV,UTTypeAIFF];panel.allowsMultipleSelection=NO;panel.canChooseDirectories=NO;
     panel.message=@"Elige un WAV o AIFF de hasta 1 segundo. Recorta el silencio inicial para que responda al instante.";
     self.choosingSound=YES;
-    [panel beginSheetModalForWindow:self.window completionHandler:^(NSModalResponse result){
+    [self.popover performClose:nil];
+    [panel beginWithCompletionHandler:^(NSModalResponse result){
         self.choosingSound=NO;if(result!=NSModalResponseOK)return;
         NSError *error=nil;AVAudioPCMBuffer *buffer=loadSound(panel.URL,&error);
         NSURL *target=nil;
@@ -220,7 +227,7 @@ static CGEventRef onKey(CGEventTapProxy proxy, CGEventType type, CGEventRef even
             while([NSFileManager.defaultManager fileExistsAtPath:target.path])target=[dir URLByAppendingPathComponent:[NSString stringWithFormat:@"%@ (%u).%@",stem,suffix++,panel.URL.pathExtension]];
             if(![NSFileManager.defaultManager copyItemAtURL:panel.URL toURL:target error:&error])buffer=nil;
         }
-        if(!buffer){NSAlert *alert=[NSAlert new];alert.messageText=@"No se ha podido importar el sonido";alert.informativeText=error.localizedDescription?:@"Prueba otro archivo WAV o AIFF.";[alert beginSheetModalForWindow:self.window completionHandler:nil];return;}
+        if(!buffer){NSAlert *alert=[NSAlert new];alert.messageText=@"No se ha podido importar el sonido";alert.informativeText=error.localizedDescription?:@"Prueba otro archivo WAV o AIFF.";[alert runModal];return;}
         [self.importedSounds addObject:buffer];[self.importedNames addObject:target.lastPathComponent];
         [self.style addItemWithTitle:[@"Grabación · " stringByAppendingString:target.lastPathComponent.stringByDeletingPathExtension]];
         [self.style selectItemAtIndex:self.style.numberOfItems-1];[self save:nil];[self preview:nil];
@@ -266,12 +273,13 @@ static CGEventRef onKey(CGEventTapProxy proxy, CGEventType type, CGEventRef even
     NSString *haptyk=@"/Applications/Haptyk.app/Contents/Resources/SoundPacks";
     if([NSFileManager.defaultManager fileExistsAtPath:haptyk])panel.directoryURL=[NSURL fileURLWithPath:haptyk isDirectory:YES];
     self.choosingSound=YES;
-    [panel beginSheetModalForWindow:self.window completionHandler:^(NSModalResponse result){
+    [self.popover performClose:nil];
+    [panel beginWithCompletionHandler:^(NSModalResponse result){
         self.choosingSound=NO;if(result!=NSModalResponseOK)return;
         NSArray<NSURL *> *roots=[self packRootsAtURL:panel.URL];
         NSMutableArray<NSDictionary *> *valid=[NSMutableArray new];NSError *error=nil;
         for(NSURL *root in roots){KVSoundPack *pack=loadPack(root,&error);if(pack)[valid addObject:@{@"root":root,@"pack":pack}];}
-        if(!valid.count){NSAlert *alert=[NSAlert new];alert.messageText=@"No se ha encontrado ningún pack válido";alert.informativeText=error.localizedDescription?:@"La carpeta necesita un pack.json y sus archivos WAV o AIFF.";[alert beginSheetModalForWindow:self.window completionHandler:nil];return;}
+        if(!valid.count){NSAlert *alert=[NSAlert new];alert.messageText=@"No se ha encontrado ningún pack válido";alert.informativeText=error.localizedDescription?:@"La carpeta necesita un pack.json y sus archivos WAV o AIFF.";[alert runModal];return;}
         NSURL *destination=[self packsDirectory];
         [NSFileManager.defaultManager createDirectoryAtURL:destination withIntermediateDirectories:YES attributes:nil error:&error];
         NSUInteger copied=0;
@@ -280,7 +288,7 @@ static CGEventRef onKey(CGEventTapProxy proxy, CGEventType type, CGEventRef even
             while([NSFileManager.defaultManager fileExistsAtPath:target.path])target=[destination URLByAppendingPathComponent:[NSString stringWithFormat:@"%@ (%u)",stem,suffix++] isDirectory:YES];
             if([NSFileManager.defaultManager copyItemAtURL:root toURL:target error:&error])copied++;
         }
-        if(!copied){NSAlert *alert=[NSAlert new];alert.messageText=@"No se ha podido copiar el pack";alert.informativeText=error.localizedDescription?:@"Comprueba los permisos de la carpeta.";[alert beginSheetModalForWindow:self.window completionHandler:nil];return;}
+        if(!copied){NSAlert *alert=[NSAlert new];alert.messageText=@"No se ha podido copiar el pack";alert.informativeText=error.localizedDescription?:@"Comprueba los permisos de la carpeta.";[alert runModal];return;}
         KVSoundPack *lastPack=valid.lastObject[@"pack"];
         [NSUserDefaults.standardUserDefaults setObject:lastPack.name forKey:@"selectedPackName"];
         [self restorePacks];[self save:nil];[self preview:nil];
@@ -297,7 +305,7 @@ static CGEventRef onKey(CGEventTapProxy proxy, CGEventType type, CGEventRef even
     self.keyboardLabel.stringValue=self.tap?@"Teclado conectado · sin registrar texto":@"Activa KeyVibe en Privacidad → Monitorización de entrada";
 }
 - (void)save:(id)sender {
-    NSUserDefaults *d=NSUserDefaults.standardUserDefaults;[d setDouble:self.volume.doubleValue forKey:@"volume"];[d setDouble:self.sensitivity.doubleValue forKey:@"sensitivity"];[d setInteger:self.style.indexOfSelectedItem forKey:@"style"];
+    NSUserDefaults *d=NSUserDefaults.standardUserDefaults;[d setDouble:self.volume.doubleValue forKey:@"volume"];[d setDouble:self.sensitivity.doubleValue forKey:@"sensitivity"];[d setInteger:self.style.indexOfSelectedItem forKey:@"style"];[d setBool:self.enabled.state==NSControlStateValueOn forKey:@"enabled"];
     NSInteger imported=self.style.indexOfSelectedItem-(NSInteger)styleNames().count;
     if(imported>=0 && imported<(NSInteger)self.importedNames.count)[d setObject:self.importedNames[imported] forKey:@"importedSound"];
     else [d removeObjectForKey:@"importedSound"];
@@ -305,12 +313,11 @@ static CGEventRef onKey(CGEventTapProxy proxy, CGEventType type, CGEventRef even
     if(pack>=0 && pack<(NSInteger)self.packs.count)[d setObject:self.packs[pack].name forKey:@"selectedPackName"];
     else [d removeObjectForKey:@"selectedPackName"];
     if(self.enabled.state!=NSControlStateValueOn)for(AVAudioPlayerNode *p in self.voices){[p stop];[p play];}
-    self.statusItem.button.title=self.enabled.state==NSControlStateValueOn?@"♫ KV":@"KV ⏸";
+    NSString *symbol=self.enabled.state==NSControlStateValueOn?@"keyboard":@"pause.circle";
+    self.statusItem.button.image=[NSImage imageWithSystemSymbolName:symbol accessibilityDescription:@"KeyVibe"];
+    self.statusItem.button.image.template=YES;
 }
-- (void)toggle:(id)sender {self.enabled.state=self.enabled.state==NSControlStateValueOn?NSControlStateValueOff:NSControlStateValueOn;[self save:nil];}
-- (void)show:(id)sender {[self.window makeKeyAndOrderFront:nil];[NSApp activateIgnoringOtherApps:YES];}
 - (void)wake:(NSNotification *)note {stopSensor();self.sensorStatus=startSensor();}
-- (BOOL)applicationShouldTerminateAfterLastWindowClosed:(NSApplication *)sender{return NO;}
 - (void)applicationWillTerminate:(NSNotification *)note {
     [self.timer invalidate];stopSensor();[self.engine stop];if(self.tapSource){CFRunLoopRemoveSource(CFRunLoopGetMain(),self.tapSource,kCFRunLoopCommonModes);CFRelease(self.tapSource);}if(self.tap){CFMachPortInvalidate(self.tap);CFRelease(self.tap);}
 }
@@ -333,7 +340,7 @@ int main(int argc,const char *argv[]) {
             if(fabs(peakBetween(1.5,2.5)-.8)>1e-6 || peakBetween(4,5)!=0)return 3;
             printf("OK: %lu sonidos válidos sin clipping; selección temporal del impacto.\n",styleNames().count*27);return 0;
         }
-        NSApplication *app=NSApplication.sharedApplication;[app setActivationPolicy:NSApplicationActivationPolicyRegular];
+        NSApplication *app=NSApplication.sharedApplication;[app setActivationPolicy:NSApplicationActivationPolicyAccessory];
         KeyVibe *delegate=[KeyVibe new];app.delegate=delegate;[app run];
     }return 0;
 }

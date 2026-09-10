@@ -4,11 +4,13 @@ Prototipo nativo de macOS para el teclado integrado de un MacBook Apple Silicon.
 
 ## Abrir
 
-Abre `build/KeyVibe.app`. Pulsa **Permitir teclado** y activa **KeyVibe** en Ajustes del Sistema → Privacidad y seguridad → Monitorización de entrada. Si macOS pide salir y volver a abrir, hazlo. El botón **Probar sonido** funciona sin ese permiso.
+Abre `build/KeyVibe.app`. KeyVibe aparece como un icono de teclado en la barra de menús y no abre una ventana ni ocupa espacio en el Dock. Pulsa el icono para mostrar el panel compacto con todos los controles; vuelve a pulsarlo o haz clic fuera para cerrarlo.
+
+Pulsa **Permitir** y activa **KeyVibe** en Ajustes del Sistema → Privacidad y seguridad → Monitorización de entrada. Si macOS pide salir y volver a abrir, hazlo. El botón **Probar** funciona sin ese permiso.
 
 El medidor responde a las vibraciones incluso antes de conceder acceso al teclado. Escribe suave y después con mayor intensidad normal; ajusta Sensibilidad si todo suena suave o fuerte. No hace falta golpear el portátil. Volumen inicial: 35 %.
 
-Cerrar la ventana deja la app en la barra de menús (`♫ KV`). Desde ahí puedes abrirla, pausarla o salir. No se añade al inicio de sesión.
+El panel incluye activación, sonido, volumen, sensibilidad, medidor, estado, importación y salida. Al pausar, el icono del teclado cambia por un símbolo de pausa. No se añade al inicio de sesión.
 
 ## Añadir sonidos
 

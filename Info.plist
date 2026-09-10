@@ -9,5 +9,6 @@
 <key>CFBundleVersion</key><string>1</string>
 <key>LSMinimumSystemVersion</key><string>13.0</string>
 <key>NSHighResolutionCapable</key><true/>
+<key>LSUIElement</key><true/>
 <key>NSInputMonitoringUsageDescription</key><string>KeyVibe detecta pulsaciones para reproducir sonidos. No guarda ni transmite lo que escribes.</string>
 </dict></plist>
